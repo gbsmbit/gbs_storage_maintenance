@@ -134,32 +134,40 @@ Module modGBSStorageMaintenanceMain
 
             Dim files = Directory.GetFiles(vol.Path, "*.*", SearchOption.AllDirectories)
 
-            For Each fl In files
+            For Each fl As String In files
 
-                Dim ext As String = Path.GetExtension(fl).Replace(".", "")
-                Dim dt As DateTime = File.GetLastWriteTime(fl)
-                Dim age As Integer = DateDiff(DateInterval.Day, dt, Now)
+                Dim LastModified As DateTime = File.GetLastWriteTime(fl)
+                Dim DaysSinceLastModified As Integer = DateDiff(DateInterval.Day, LastModified, Now)
+                Dim flDetail As String = fl & " (Last Modified: " & LastModified.ToString("yyyy/MM/dd HH:mm:ss") & "; Days since Last Modified: " & DaysSinceLastModified.ToString & ")"
 
                 If Not vol.Exclusions.ToUpper.Contains(Path.GetExtension(fl).Replace(".", "").ToUpper) Then
                     If DateDiff(DateInterval.Day, File.GetLastWriteTime(fl), Now) > vol.MaximumAge Then
-                        If vol.ActuallyDelete Then
-                            Try
-                                File.Delete(fl)
-                                WriteToLog("Successfully removed file: " & fl)
-                            Catch ex As Exception
-                                WriteToLog("Failed to removed file: " & fl & vbCrLf & "        Error: " & ex.Message)
-                            End Try
+                        If Year(LastModified) > 1980 Then
+                            If vol.ActuallyDelete Then
+                                Try
+                                    File.Delete(fl)
+                                    WriteToLog("Successfully removed file: " & flDetail)
+                                Catch ex As Exception
+                                    WriteToLog("Failed to removed file: " & flDetail & vbCrLf & "        Error: " & ex.Message)
+                                End Try
+                            Else
+                                WriteToLog("File would be removed if I was allowed to: " & flDetail)
+                            End If
                         Else
-                            WriteToLog("File would be removed if I was allowed to: " & fl)
+                            If fl.Length >= MaximumPathLength Then
+                                WriteToLog("File reports weird last modification date (path may be too long), so not risking a removal: " & flDetail)
+                            Else
+                                WriteToLog("File reports weird last modification date, so not risking a removal: " & flDetail)
+                            End If
                         End If
-                    Else
+                            Else
                         If vol.VerboseLogging Then
-                            WriteToLog("File younger than age threshold: " & fl)
+                            WriteToLog("File younger than age threshold: " & flDetail)
                         End If
                     End If
                 Else
                     If vol.VerboseLogging Then
-                        WriteToLog("File ignored due to exclusions: " & fl)
+                        WriteToLog("File ignored due to exclusions: " & flDetail)
                     End If
                 End If
 
@@ -176,7 +184,7 @@ Module modGBSStorageMaintenanceMain
     Private Sub WriteToLog(ByVal msg As String)
 
         Using lg As New StreamWriter(LogFileName, append:=True)
-            lg.WriteLine(Now.ToString("yyyy/mm/dd HH:mm:ss") & " - " & msg)
+            lg.WriteLine(Now.ToString("yyyy/MM/dd HH:mm:ss") & " - " & msg)
         End Using
 
     End Sub
@@ -192,11 +200,11 @@ Module modGBSStorageMaintenanceMain
             fl.WriteLine(CommentPrefix & " The equals sign (=) is the delimiter, and is thus somewhat important")
             fl.WriteLine(CommentPrefix & " Comment lines, prefixed with !-- are ignored" & vbCrLf)
             fl.WriteLine(CommentPrefix & " " & StartTag)
-            fl.WriteLine(CommentPrefix & "     Path = D: (UNC paths accepted)")
-            fl.WriteLine(CommentPrefix & "     MaxAge = 90 (Files older than this many days will be removed)")
-            fl.WriteLine(CommentPrefix & "     Exclusions = pdf|xlsx (Files with these extensions will be ignored)")
-            fl.WriteLine(CommentPrefix & "     VerboseLog = [Yes|No] (Log either all actions, or file removals only)")
-            fl.WriteLine(CommentPrefix & "     ActuallyRemove = [Yes|No] (Optional (defaults to Yes) - allows dry run)")
+            fl.WriteLine(CommentPrefix & "     Path = D:" & vbTab & vbTab & vbTab & vbTab & vbTab & "(Compulsory)" & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & "- UNC paths accepted")
+            fl.WriteLine(CommentPrefix & "     MaxAge = 90" & vbTab & vbTab & vbTab & vbTab & vbTab & "(Optional - defaults to 90 days if omitted)" & vbTab & vbTab & "- Files older than this many days will be removed")
+            fl.WriteLine(CommentPrefix & "     Exclusions = pdf|xlsx|..." & vbTab & "(Optional - defaults to None if omitted)" & vbTab & vbTab & "- Files with these extensions will be ignored")
+            fl.WriteLine(CommentPrefix & "     VerboseLog = [Yes|No]" & vbTab & vbTab & "(Optional - defaults to Yes if omitted)" & vbTab & vbTab & vbTab & "- Log either all actions, or file removals only")
+            fl.WriteLine(CommentPrefix & "     ActuallyRemove = [Yes|No]" & vbTab & "(Optional - defaults to Yes if omitted)" & vbTab & vbTab & vbTab & "- allows dry run")
             fl.WriteLine(CommentPrefix & " " & EndTag & vbCrLf)
 
         End Using
