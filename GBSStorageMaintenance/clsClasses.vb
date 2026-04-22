@@ -3,14 +3,16 @@
 Public Class Volume
 
     Public Property Path As String
+    Public Property IncludeSubFolders As Boolean
     Public Property MaximumAge As Integer
     Public Property Exclusions As String
     Public Property VerboseLogging As Boolean
     Public Property ActuallyDelete As Boolean
 
-    Public Sub New(ByVal _Path As String, ByVal _MaximumAge As Integer, ByVal _Exclusions As String, ByVal _VerboseLogging As Boolean, ByVal _ActuallyDelete As Boolean)
+    Public Sub New(ByVal _Path As String, ByVal _IncludeSubFolders As Boolean, ByVal _MaximumAge As Integer, ByVal _Exclusions As String, ByVal _VerboseLogging As Boolean, ByVal _ActuallyDelete As Boolean)
 
         Path = _Path
+        IncludeSubFolders = _IncludeSubFolders
         MaximumAge = _MaximumAge
         Exclusions = _Exclusions
         VerboseLogging = _VerboseLogging

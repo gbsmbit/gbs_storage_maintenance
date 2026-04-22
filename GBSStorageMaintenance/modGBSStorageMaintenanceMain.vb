@@ -61,6 +61,7 @@ Module modGBSStorageMaintenanceMain
             For Each blck As Block In Blocks
 
                 Dim pth As String = ""
+                Dim incl As Boolean = False
                 Dim age As Integer = MaximumAgeDefault
                 Dim exc As String = ""
                 Dim vbs As Boolean = True
@@ -75,6 +76,10 @@ Module modGBSStorageMaintenanceMain
                         Try
                             If parm(0).Trim.ToUpper.Contains("PATH") Then
                                 pth = parm(1).Trim
+                            ElseIf parm(0).Trim.ToUpper.Contains("INCLUDE") Then
+                                If parm(1).Trim.ToUpper = "YES" Then
+                                    incl = True
+                                End If
                             ElseIf parm(0).Trim.ToUpper.Contains("MAXAGE") Then
                                 age = CInt(parm(1).Trim)
                             ElseIf parm(0).Trim.ToUpper.Contains("EXCLUSION") Then
@@ -96,7 +101,7 @@ Module modGBSStorageMaintenanceMain
                 Next
 
                 If pth.Length > 0 Then
-                    Volumes.Add(New Volume(pth, age, exc, vbs, rmv))
+                    Volumes.Add(New Volume(pth, incl, age, exc, vbs, rmv))
                 End If
 
             Next
@@ -109,6 +114,7 @@ Module modGBSStorageMaintenanceMain
                     cnt += 1
                     msg += "        Volume " & cnt.ToString & ":" & vbCrLf
                     msg += "                Path = " & vol.Path & ";" & vbCrLf
+                    msg += "                IncludeSubFolders = " & vol.IncludeSubFolders.ToString & ";" & vbCrLf
                     msg += "                MaxAge = " & vol.MaximumAge & " days;" & vbCrLf
                     msg += "                Exclusions = " & vol.Exclusions & ";" & vbCrLf
                     msg += "                VerboseLog = " & vol.VerboseLogging.ToString & ";" & vbCrLf
@@ -128,24 +134,36 @@ Module modGBSStorageMaintenanceMain
 
     Private Sub PerformVolumeMaintenance(ByRef vol As Volume, ByVal volNo As Integer)
 
-        WriteToLog("Beginning maintenance on Volume No. " & volNo.ToString)
+        WriteToLog("Beginning maintenance on Volume No. " & volNo.ToString & ": " & vol.Path)
 
         If Directory.Exists(vol.Path) Then
 
-            Dim files = Directory.GetFiles(vol.Path, "*.*", SearchOption.AllDirectories)
+            Dim StorageReleased As Long = 0
+            Dim strStorageReleased As String = ""
+            Dim dir As New DirectoryInfo(vol.Path)
+            Dim files As FileInfo() = Nothing
 
-            For Each fl As String In files
+            If vol.IncludeSubFolders Then
+                files = dir.GetFiles("*.*", SearchOption.AllDirectories)
+            Else
+                files = dir.GetFiles("*.*", SearchOption.TopDirectoryOnly)
+            End If
 
-                Dim LastModified As DateTime = File.GetLastWriteTime(fl)
+            For Each fl As FileInfo In files
+
+                Dim LastModified As DateTime = fl.LastWriteTime
                 Dim DaysSinceLastModified As Integer = DateDiff(DateInterval.Day, LastModified, Now)
-                Dim flDetail As String = fl & " (Last Modified: " & LastModified.ToString("yyyy/MM/dd HH:mm:ss") & "; Days since Last Modified: " & DaysSinceLastModified.ToString & ")"
+                Dim flSize As Long = fl.Length
+                Dim flDetail As String = fl.FullName & vbTab & " (Last Modified: " & LastModified.ToString("yyyy/MM/dd HH:mm:ss") & "; " &
+                                                             "Days since Last Modified: " & DaysSinceLastModified.ToString & "; " &
+                                                             "Size: " & flSize.ToString & " bytes)"
 
-                If Not vol.Exclusions.ToUpper.Contains(Path.GetExtension(fl).Replace(".", "").ToUpper) Then
-                    If DateDiff(DateInterval.Day, File.GetLastWriteTime(fl), Now) > vol.MaximumAge Then
+                If Not vol.Exclusions.ToUpper.Contains(fl.Extension.Replace(".", "").ToUpper) Then
+                    If DateDiff(DateInterval.Day, LastModified, Now) > vol.MaximumAge Then
                         If Year(LastModified) > 1980 Then
                             If vol.ActuallyDelete Then
                                 Try
-                                    File.Delete(fl)
+                                    fl.Delete()
                                     WriteToLog("Successfully removed file: " & flDetail)
                                 Catch ex As Exception
                                     WriteToLog("Failed to removed file: " & flDetail & vbCrLf & "        Error: " & ex.Message)
@@ -153,6 +171,7 @@ Module modGBSStorageMaintenanceMain
                             Else
                                 WriteToLog("File would be removed if I was allowed to: " & flDetail)
                             End If
+                            StorageReleased += flSize
                         Else
                             If fl.Length >= MaximumPathLength Then
                                 WriteToLog("File reports weird last modification date (path may be too long), so not risking a removal: " & flDetail)
@@ -160,7 +179,7 @@ Module modGBSStorageMaintenanceMain
                                 WriteToLog("File reports weird last modification date, so not risking a removal: " & flDetail)
                             End If
                         End If
-                            Else
+                    Else
                         If vol.VerboseLogging Then
                             WriteToLog("File younger than age threshold: " & flDetail)
                         End If
@@ -173,7 +192,23 @@ Module modGBSStorageMaintenanceMain
 
             Next
 
-            WriteToLog("Maintenance complete on Volume No. " & volNo.ToString & vbCrLf)
+            WriteToLog("Maintenance complete on Volume No. " & volNo.ToString & ": " & vol.Path)
+
+            If StorageReleased < 1024 Then
+                strStorageReleased = StorageReleased.ToString & " bytes"
+            ElseIf StorageReleased < (1024 * 1024) Then
+                strStorageReleased = Math.Round((StorageReleased / 1024), 3).ToString & " Kb"
+            ElseIf StorageReleased < (1024 * 1024 * 1024) Then
+                strStorageReleased = Math.Round((StorageReleased / (1024 * 1024)), 3).ToString & " Mb"
+            Else
+                strStorageReleased = Math.Round((StorageReleased / (1024 * 1024 * 1024)), 3).ToString & " Gb"
+            End If
+
+            If vol.ActuallyDelete Then
+                WriteToLog("Total storage released on Volume No. " & volNo.ToString & ": " & strStorageReleased & vbCrLf)
+            Else
+                WriteToLog("Total storage I could have released on Volume No. " & volNo.ToString & ": " & strStorageReleased & vbCrLf)
+            End If
 
         Else
             WriteToLog("Path specified does not exist, or is not accessible: " & vol.Path & vbCrLf)
@@ -200,11 +235,12 @@ Module modGBSStorageMaintenanceMain
             fl.WriteLine(CommentPrefix & " The equals sign (=) is the delimiter, and is thus somewhat important")
             fl.WriteLine(CommentPrefix & " Comment lines, prefixed with !-- are ignored" & vbCrLf)
             fl.WriteLine(CommentPrefix & " " & StartTag)
-            fl.WriteLine(CommentPrefix & "     Path = D:" & vbTab & vbTab & vbTab & vbTab & vbTab & "(Compulsory)" & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & "- UNC paths accepted")
-            fl.WriteLine(CommentPrefix & "     MaxAge = 90" & vbTab & vbTab & vbTab & vbTab & vbTab & "(Optional - defaults to 90 days if omitted)" & vbTab & vbTab & "- Files older than this many days will be removed")
-            fl.WriteLine(CommentPrefix & "     Exclusions = pdf|xlsx|..." & vbTab & "(Optional - defaults to None if omitted)" & vbTab & vbTab & "- Files with these extensions will be ignored")
-            fl.WriteLine(CommentPrefix & "     VerboseLog = [Yes|No]" & vbTab & vbTab & "(Optional - defaults to Yes if omitted)" & vbTab & vbTab & vbTab & "- Log either all actions, or file removals only")
-            fl.WriteLine(CommentPrefix & "     ActuallyRemove = [Yes|No]" & vbTab & "(Optional - defaults to Yes if omitted)" & vbTab & vbTab & vbTab & "- allows dry run")
+            fl.WriteLine(CommentPrefix & "     Path = D:" & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & "(Compulsory)" & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & "- UNC paths accepted")
+            fl.WriteLine(CommentPrefix & "     IncludeSubFolders = [Yes|No]" & vbTab & "(Optional - defaults to No if omitted)" & vbTab & vbTab & vbTab & "- To include or not include files contained in subfolders of Path")
+            fl.WriteLine(CommentPrefix & "     MaxAge = 90" & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & "(Optional - defaults to 90 days if omitted)" & vbTab & vbTab & "- Files older than this many days will be removed")
+            fl.WriteLine(CommentPrefix & "     Exclusions = pdf|xlsx|..." & vbTab & vbTab & "(Optional - defaults to None if omitted)" & vbTab & vbTab & "- Files with these extensions will be ignored")
+            fl.WriteLine(CommentPrefix & "     VerboseLog = [Yes|No]" & vbTab & vbTab & vbTab & "(Optional - defaults to Yes if omitted)" & vbTab & vbTab & vbTab & "- Log either all actions, or file removals only")
+            fl.WriteLine(CommentPrefix & "     ActuallyRemove = [Yes|No]" & vbTab & vbTab & "(Optional - defaults to Yes if omitted)" & vbTab & vbTab & vbTab & "- allows dry run")
             fl.WriteLine(CommentPrefix & " " & EndTag & vbCrLf)
 
         End Using
