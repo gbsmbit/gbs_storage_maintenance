@@ -8,7 +8,17 @@ Module modGBSStorageMaintenanceMain
     Sub Main()
 
         ParameterFileName = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), ParameterFileName)
-        LogFileName = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), LogFileName & "_" & Now.ToString("yyyymmdd_HHmmss") & ".log")
+
+        If Not Directory.Exists(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Logs")) Then
+            Try
+                Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Logs"))
+                LogFileName = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Logs", LogFileName & "_" & Now.ToString("yyyymmdd_HHmmss") & ".log")
+            Catch ex As Exception
+                LogFileName = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), LogFileName & "_" & Now.ToString("yyyymmdd_HHmmss") & ".log")
+            End Try
+        Else
+            LogFileName = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Logs", LogFileName & "_" & Now.ToString("yyyymmdd_HHmmss") & ".log")
+        End If
 
         WriteToLog("Beginning execution")
 
