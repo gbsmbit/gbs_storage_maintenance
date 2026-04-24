@@ -126,7 +126,11 @@ Module modGBSStorageMaintenanceMain
                     msg += "                Path = " & vol.Path & ";" & vbCrLf
                     msg += "                IncludeSubFolders = " & vol.IncludeSubFolders.ToString & ";" & vbCrLf
                     msg += "                MaxAge = " & vol.MaximumAge & " days;" & vbCrLf
-                    msg += "                Exclusions = " & vol.Exclusions & ";" & vbCrLf
+                    If vol.Exclusions.Length = 0 Then
+                        msg += "                Exclusions = None;" & vbCrLf
+                    Else
+                        msg += "                Exclusions = " & vol.Exclusions & ";" & vbCrLf
+                    End If
                     msg += "                VerboseLog = " & vol.VerboseLogging.ToString & ";" & vbCrLf
                     msg += "                ActuallyRemove = " & vol.ActuallyDelete.ToString & ";" & vbCrLf
                 Next
@@ -149,7 +153,6 @@ Module modGBSStorageMaintenanceMain
         If Directory.Exists(vol.Path) Then
 
             Dim StorageReleased As Long = 0
-            Dim strStorageReleased As String = ""
             Dim dir As New DirectoryInfo(vol.Path)
             Dim files As FileInfo() = Nothing
 
@@ -165,8 +168,8 @@ Module modGBSStorageMaintenanceMain
                 Dim DaysSinceLastModified As Integer = DateDiff(DateInterval.Day, LastModified, Now)
                 Dim flSize As Long = fl.Length
                 Dim flDetail As String = fl.FullName & vbTab & " (Last Modified: " & LastModified.ToString("yyyy/MM/dd HH:mm:ss") & "; " &
-                                                             "Days since Last Modified: " & DaysSinceLastModified.ToString & "; " &
-                                                             "Size: " & flSize.ToString & " bytes)"
+                                                                "Days since Last Modified: " & DaysSinceLastModified.ToString & "; " &
+                                                                "Size: " & FileSizeReadable(flSize) & ")"
 
                 If Not vol.Exclusions.ToUpper.Contains(fl.Extension.Replace(".", "").ToUpper) Then
                     If DateDiff(DateInterval.Day, LastModified, Now) > vol.MaximumAge Then
@@ -204,58 +207,15 @@ Module modGBSStorageMaintenanceMain
 
             WriteToLog("Maintenance complete on Volume No. " & volNo.ToString & ": " & vol.Path)
 
-            If StorageReleased < 1024 Then
-                strStorageReleased = StorageReleased.ToString & " bytes"
-            ElseIf StorageReleased < (1024 * 1024) Then
-                strStorageReleased = Math.Round((StorageReleased / 1024), 3).ToString & " Kb"
-            ElseIf StorageReleased < (1024 * 1024 * 1024) Then
-                strStorageReleased = Math.Round((StorageReleased / (1024 * 1024)), 3).ToString & " Mb"
-            Else
-                strStorageReleased = Math.Round((StorageReleased / (1024 * 1024 * 1024)), 3).ToString & " Gb"
-            End If
-
             If vol.ActuallyDelete Then
-                WriteToLog("Total storage released on Volume No. " & volNo.ToString & ": " & strStorageReleased & vbCrLf)
+                WriteToLog("Total storage released on Volume No. " & volNo.ToString & ": " & FileSizeReadable(StorageReleased) & vbCrLf)
             Else
-                WriteToLog("Total storage I could have released on Volume No. " & volNo.ToString & ": " & strStorageReleased & vbCrLf)
+                WriteToLog("Total storage I could have released on Volume No. " & volNo.ToString & ": " & FileSizeReadable(StorageReleased) & vbCrLf)
             End If
 
         Else
             WriteToLog("Path specified does not exist, or is not accessible: " & vol.Path & vbCrLf)
         End If
-
-    End Sub
-
-    Private Sub WriteToLog(ByVal msg As String)
-
-        Using lg As New StreamWriter(LogFileName, append:=True)
-            lg.WriteLine(Now.ToString("yyyy/MM/dd HH:mm:ss") & " - " & msg)
-        End Using
-
-    End Sub
-
-    Private Sub CreateInitialParameterFileName()
-
-        Using fl As New StreamWriter(ParameterFileName)
-
-            fl.WriteLine(CommentPrefix & " GBSStorageMaintenance parameters" & vbCrLf)
-
-            fl.WriteLine(CommentPrefix & " Sample storage instance block - add as many of these as you like - try to get the syntax right, otherwise nothing is guaranteed")
-            fl.WriteLine(CommentPrefix & " Everything is cASE iNSENSITive and spacing between   words  or  lines          is        irrelevant")
-            fl.WriteLine(CommentPrefix & " The equals sign (=) is the delimiter, and is thus somewhat important")
-            fl.WriteLine(CommentPrefix & " Comment lines, prefixed with !-- are ignored" & vbCrLf)
-            fl.WriteLine(CommentPrefix & " " & StartTag)
-            fl.WriteLine(CommentPrefix & "     Path = D:" & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & "(Compulsory)" & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & "- UNC paths accepted")
-            fl.WriteLine(CommentPrefix & "     IncludeSubFolders = [Yes|No]" & vbTab & "(Optional - defaults to No if omitted)" & vbTab & vbTab & vbTab & "- To include or not include files contained in subfolders of Path")
-            fl.WriteLine(CommentPrefix & "     MaxAge = 90" & vbTab & vbTab & vbTab & vbTab & vbTab & vbTab & "(Optional - defaults to 90 days if omitted)" & vbTab & vbTab & "- Files older than this many days will be removed")
-            fl.WriteLine(CommentPrefix & "     Exclusions = pdf|xlsx|..." & vbTab & vbTab & "(Optional - defaults to None if omitted)" & vbTab & vbTab & "- Files with these extensions will be ignored")
-            fl.WriteLine(CommentPrefix & "     VerboseLog = [Yes|No]" & vbTab & vbTab & vbTab & "(Optional - defaults to Yes if omitted)" & vbTab & vbTab & vbTab & "- Log either all actions, or file removals only")
-            fl.WriteLine(CommentPrefix & "     ActuallyRemove = [Yes|No]" & vbTab & vbTab & "(Optional - defaults to Yes if omitted)" & vbTab & vbTab & vbTab & "- allows dry run")
-            fl.WriteLine(CommentPrefix & " " & EndTag & vbCrLf)
-
-        End Using
-
-        WriteToLog("No parameter file found - new sample framework file created")
 
     End Sub
 
